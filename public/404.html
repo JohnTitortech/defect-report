@@ -5,9 +5,10 @@
     <title>Defect Report Tracker</title>
     <script>
       // GitHub Pages SPA redirect trick
-      // Converts /defect-report-tracker/login → /defect-report-tracker/?p=/login
-      var repo = '/defect-report-tracker';
-      var path = window.location.pathname.replace(repo, '') || '/';
+      // Converts /<repo>/login → /<repo>/?p=/login
+      // The repo segment is read from the URL, so renaming the repo needs no edit here.
+      var repo = '/' + window.location.pathname.split('/')[1];
+      var path = window.location.pathname.slice(repo.length) || '/';
       var search = window.location.search;
       var hash = window.location.hash;
       var redirectUrl = repo + '/?p=' + encodeURIComponent(path + search) + hash;
