@@ -64,7 +64,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-steel-600 text-xs mt-6">
-          © {new Date().getFullYear()} Defect Report Tracker
+          © {new Date().getFullYear()} Defect Report
         </p>
       </div>
     </div>
