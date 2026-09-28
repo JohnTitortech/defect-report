@@ -1,4 +1,4 @@
-# Defect Report Tracker
+# Defect Report
 
 Industrial-grade defect report management dashboard — React + Vite, Firebase (Auth + Firestore), Cloudinary (images), Tailwind CSS.
 
@@ -24,8 +24,8 @@ Industrial-grade defect report management dashboard — React + Vite, Firebase (
 ### 1. Clone & install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/defect-report-tracker.git
-cd defect-report-tracker
+git clone https://github.com/YOUR_USERNAME/defect-report.git
+cd defect-report
 npm install
 ```
 
@@ -83,7 +83,7 @@ firebase deploy --only firestore:rules
 npm run dev
 ```
 
-Buka http://localhost:5173/defect-report-tracker/
+Buka http://localhost:5173/defect-report/
 
 ---
 
