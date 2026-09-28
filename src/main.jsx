@@ -20,7 +20,7 @@ function ProtectedRoute({ children }) {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter basename="/defect-report-tracker">
+      <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '') || '/'}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={
