@@ -1,3 +1,5 @@
+//LOL
+
 /**
  * Dashboard — defect report table with full CRUD, search, filter, sort, export.
  */
