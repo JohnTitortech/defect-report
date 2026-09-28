@@ -45,6 +45,7 @@ function progressStatus(report) {
 // and Completed → today >= OVERDUE_DAYS (same basis as the Delay column).
 function verificationStatus(report) {
   if ((report.verification ?? 0) >= 1) return 'complete'
+  if ((report.progress ?? 0) < 4) return 'normal' // progress must be full right now
   const completedAt = report.progressTimestamps?.['4']
   if (!completedAt) return 'normal'
   const delay = diffDays(completedAt, new Date())
