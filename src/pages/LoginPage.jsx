@@ -32,8 +32,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-accent rounded-2xl mb-4 shadow-lg shadow-accent/30">
             <ShieldCheck className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Defect Report Tracker</h1>
-          <p className="text-steel-400 text-sm mt-1">Industrial Quality Control Dashboard</p>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Defect Report</h1>
         </div>
 
         {/* Card */}
