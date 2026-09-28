@@ -27,7 +27,17 @@ const PATHS = [
 
 const PERCENT = ['', 'Plan', 'Do', 'Check', 'Action']
 
-export default function QuadrantProgress({ value = 0, onChange, size = 44, readonly = false, labels = PERCENT, maxValue = 4 }) {
+// status: 'normal' | 'overdue' | 'complete'
+//  - overdue  → whole circle turns red (not fully filled yet and already delayed)
+//  - complete → filled quadrants turn green (fully filled)
+const STATUS_STYLE = {
+  normal:   { bg: null,      ring: null,      fill: '#111827', label: '' },
+  overdue:  { bg: '#ef4444', ring: '#b91c1c', fill: '#7f1d1d', label: 'text-red-600 dark:text-red-400' },
+  complete: { bg: null,      ring: '#16a34a', fill: '#16a34a', label: 'text-green-600 dark:text-green-400' },
+}
+
+export default function QuadrantProgress({ value = 0, onChange, size = 44, readonly = false, labels = PERCENT, maxValue = 4, status = 'normal' }) {
+  const st = STATUS_STYLE[status] || STATUS_STYLE.normal
   const steps = maxValue + 1 // number of distinct states (0..maxValue)
   const handleClick = () => {
     if (readonly || !onChange) return
@@ -47,7 +57,13 @@ export default function QuadrantProgress({ value = 0, onChange, size = 44, reado
         role={readonly ? 'img' : 'button'}
       >
         {/* Outer circle background */}
-        <circle cx="50" cy="50" r="48" fill="white" stroke="#d1d5db" strokeWidth="2" className="dark:fill-steel-800 dark:stroke-steel-600" />
+        <circle
+          cx="50" cy="50" r="48"
+          fill={st.bg || 'white'}
+          stroke={st.bg ? st.ring : '#d1d5db'}
+          strokeWidth="2"
+          className={st.bg ? '' : 'dark:fill-steel-800 dark:stroke-steel-600'}
+        />
 
         {/* Filled quadrants */}
         {PATHS.map((d, i) => {
@@ -57,8 +73,8 @@ export default function QuadrantProgress({ value = 0, onChange, size = 44, reado
             <path
               key={i}
               d={d}
-              fill={isFilled ? '#111827' : 'transparent'}
-              className={isFilled ? 'dark:fill-steel-100' : ''}
+              fill={isFilled ? st.fill : 'transparent'}
+              className={isFilled && status === 'normal' ? 'dark:fill-steel-100' : ''}
             />
           )
         })}
@@ -72,9 +88,14 @@ export default function QuadrantProgress({ value = 0, onChange, size = 44, reado
         )}
 
         {/* Outer ring */}
-        <circle cx="50" cy="50" r="48" fill="none" stroke="#9ca3af" strokeWidth="2" className="dark:stroke-steel-500" />
+        <circle
+          cx="50" cy="50" r="48" fill="none"
+          stroke={st.ring || '#9ca3af'}
+          strokeWidth={st.ring ? 4 : 2}
+          className={st.ring ? '' : 'dark:stroke-steel-500'}
+        />
       </svg>
-      <span className="text-[10px] font-mono text-steel-500 dark:text-steel-400 leading-none">
+      <span className={`text-[10px] font-mono leading-none ${st.label || 'text-steel-500 dark:text-steel-400'}`}>
         {labels[value]}
       </span>
     </div>
