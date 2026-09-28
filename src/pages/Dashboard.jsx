@@ -31,6 +31,26 @@ import toast            from 'react-hot-toast'
 const PROGRESS_OPTS = ['All', 'Plan', 'Do', 'Check', 'Action']
 const PROGRESS_VAL  = { 'All': null, 'Plan': 1, 'Do': 2, 'Check': 3, 'Action': 4 }
 
+// Delay (whole days) at which an unfinished progress/verification turns red.
+const OVERDUE_DAYS = 1
+
+// Progress: done at 4 (green). Otherwise red once Created → today >= OVERDUE_DAYS.
+function progressStatus(report) {
+  if ((report.progress ?? 0) >= 4) return 'complete'
+  const delay = diffDays(report.createdAt, new Date())
+  return delay !== null && delay >= OVERDUE_DAYS ? 'overdue' : 'normal'
+}
+
+// Verification: done at 1 (green). Otherwise red once progress was completed
+// and Completed → today >= OVERDUE_DAYS (same basis as the Delay column).
+function verificationStatus(report) {
+  if ((report.verification ?? 0) >= 1) return 'complete'
+  const completedAt = report.progressTimestamps?.['4']
+  if (!completedAt) return 'normal'
+  const delay = diffDays(completedAt, new Date())
+  return delay !== null && delay >= OVERDUE_DAYS ? 'overdue' : 'normal'
+}
+
 export default function Dashboard() {
   const { user, logOut }   = useAuth()
   const { reports, loading, reload, add, update, remove } = useReports()
@@ -546,7 +566,7 @@ function ReportRow({ report, rowNum, selected, onToggle, onEdit, onDelete, onVie
       {/* Progress */}
       <td className="px-3 py-3 align-top text-center">
         <div className="flex justify-center">
-          <QuadrantProgress value={report.progress ?? 0} onChange={onProgressChange} size={40} />
+          <QuadrantProgress value={report.progress ?? 0} onChange={onProgressChange} size={40} status={progressStatus(report)} />
         </div>
       </td>
 
@@ -569,7 +589,7 @@ function ReportRow({ report, rowNum, selected, onToggle, onEdit, onDelete, onVie
       {/* Verification */}
       <td className="px-3 py-3 align-top text-center">
         <div className="flex justify-center">
-          <QuadrantProgress value={report.verification ?? 0} onChange={onVerificationChange} size={40} labels={['NG', 'OK']} maxValue={1} />
+          <QuadrantProgress value={report.verification ?? 0} onChange={onVerificationChange} size={40} labels={['NG', 'OK']} maxValue={1} status={verificationStatus(report)} />
         </div>
       </td>
 
