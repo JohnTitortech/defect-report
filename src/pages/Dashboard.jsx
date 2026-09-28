@@ -182,7 +182,6 @@ export default function Dashboard() {
             </div>
             <div className="hidden sm:block">
               <p className="text-sm font-bold text-steel-900 dark:text-steel-100 leading-none">Defect Report</p>
-              <p className="text-[10px] text-steel-400 uppercase tracking-wider leading-none mt-0.5">Tracker</p>
             </div>
           </div>
 
