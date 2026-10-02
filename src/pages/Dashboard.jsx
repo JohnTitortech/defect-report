@@ -272,7 +272,7 @@ export default function Dashboard() {
                 <Car className="w-4 h-4" />
               </button>
             )}
-            {user?.role === 'MASTER' && (
+            {(user?.role === 'MASTER' || user?.role === 'QC') && (
               <button onClick={() => setShowNotificationMgr(true)} className="icon-btn" title="Manage Notification Emails">
                 <Mail className="w-4 h-4" />
               </button>
