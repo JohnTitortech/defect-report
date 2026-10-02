@@ -23,7 +23,8 @@
  * Kredensial dibaca dari environment variable (diisi oleh GitHub Actions
  * dari Secrets), TIDAK pernah ditulis langsung di file ini.
  */
-import admin from 'firebase-admin'
+import { initializeApp, cert } from 'firebase-admin/app'
+import { getFirestore } from 'firebase-admin/firestore'
 
 // ── Config dari environment ──────────────────────────────────────────────────
 const {
@@ -42,10 +43,10 @@ for (const [k, v] of Object.entries({
   if (!v) { console.error(`Missing env var: ${k}`); process.exit(1) }
 }
 
-admin.initializeApp({
-  credential: admin.credential.cert(JSON.parse(FIREBASE_SERVICE_ACCOUNT)),
+const app = initializeApp({
+  credential: cert(JSON.parse(FIREBASE_SERVICE_ACCOUNT)),
 })
-const db = admin.firestore()
+const db = getFirestore(app)
 
 // ── Helper tanggal (semua dihitung di zona Asia/Jakarta) ────────────────────
 const JAKARTA_TZ = 'Asia/Jakarta'
