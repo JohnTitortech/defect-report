@@ -8,8 +8,7 @@
  *     tadi lewat login Google → catat SERVICE_ID
  *  3. Email Templates → Create New Template. Isi "To email" dengan
  *     {{to_email}}, lalu isi body dengan variabel:
- *     {{unit_no}}, {{model}}, {{problem}}, {{link}}, {{image_url}} → catat TEMPLATE_ID
- *     ({{image_url}} dipakai di tag <img src="{{image_url}}"> pada template)
+ *     {{unit_no}}, {{model}}, {{problem}}, {{link}} → catat TEMPLATE_ID
  *  4. Account → General → catat PUBLIC KEY
  *  5. Isi tiga nilai itu di file .env:
  *     VITE_EMAILJS_SERVICE_ID=...
@@ -54,12 +53,10 @@ export async function sendNewDefectEmail(report) {
   if (recipients.length === 0) return
 
   const params = {
-    unit_no:   report.unitNo || '-',
-    model:     report.model  || '-',
-    problem:   report.problem || '-',
-    link:      APP_LINK,
-    // Foto defect (kalau ada). Pakai detail dulu, lalu position sebagai cadangan.
-    image_url: report.detailImageUrl || report.positionImageUrl || '',
+    unit_no: report.unitNo || '-',
+    model:   report.model  || '-',
+    problem: report.problem || '-',
+    link:    APP_LINK,
   }
 
   await Promise.allSettled(
