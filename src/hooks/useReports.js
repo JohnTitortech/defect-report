@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { fetchReports, createReport, updateReport, deleteReport } from '../lib/db'
+import { sendNewDefectEmail } from '../lib/email'
 import toast from 'react-hot-toast'
 
 export function useReports() {
@@ -27,6 +28,9 @@ export function useReports() {
       await createReport(data)
       toast.success('Report created', { id })
       await load()
+      // Email notifikasi dikirim di latar belakang; kegagalan tidak
+      // mengganggu alur simpan laporan (sudah ditangani di sendNewDefectEmail).
+      sendNewDefectEmail(data)
     } catch (err) {
       toast.error('Failed to create report', { id })
       console.error(err)
