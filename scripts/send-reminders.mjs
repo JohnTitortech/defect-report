@@ -6,7 +6,9 @@
  * setiap hari jam 00:30 UTC (= 07:30 WIB), BUKAN dari browser pengguna.
  *
  * Aturan:
- *  - Progress belum 4 → acuan tanggal = createdAt.
+ *  - Progress belum 4 → acuan tanggal = field `date` (tanggal problem
+ *    ditemukan, yang diinput manual di form — BUKAN createdAt/tanggal input
+ *    ke sistem). Formatnya string "YYYY-MM-DD".
  *  - Progress sudah 4 tapi verification belum 1 → acuan tanggal =
  *    progressTimestamps['4'] (tanggal progress mencapai 4).
  *  - "Due date" = hari kerja berikutnya setelah tanggal acuan
@@ -98,6 +100,14 @@ function tsToDateOnly(ts) {
   return toJakartaDateOnly(date)
 }
 
+// Field `date` di dokumen report adalah string "YYYY-MM-DD" yang diinput
+// manual di form (tanggal problem ditemukan), bukan Firestore Timestamp.
+// Sudah berupa tanggal kalender apa adanya, tidak perlu konversi zona waktu.
+function dateStringToDateOnly(dateStr) {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null
+  return new Date(`${dateStr}T00:00:00Z`)
+}
+
 // ── EmailJS REST API (server-side, pakai private key sebagai accessToken) ──
 async function sendReminderEmail({ to_email, unit_no, model, problem, stage, days }) {
   const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
@@ -142,7 +152,7 @@ async function main() {
 
     // ── Tahap Progress ──
     if (progress < 4) {
-      const baseDate = tsToDateOnly(report.createdAt)
+      const baseDate = dateStringToDateOnly(report.date)
       const dueDate  = baseDate && nextBusinessDay(baseDate)
       const alreadySentToday = report.progressReminderLastSentDate === jakartaDateKey(today)
       const isDueOrLater = dueDate && today.getTime() >= dueDate.getTime() && !isWeekend(today)
