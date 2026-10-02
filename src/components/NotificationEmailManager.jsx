@@ -1,7 +1,6 @@
 /**
- * NotificationEmailManager — dialog untuk MASTER mengelola daftar email
- * yang menerima notifikasi otomatis setiap ada defect report baru.
- * Hanya bisa diakses oleh role MASTER.
+ * NotificationEmailManager — dialog untuk MASTER dan QC mengelola daftar
+ * email yang menerima notifikasi otomatis setiap ada defect report baru.
  */
 import React, { useState } from 'react'
 import { X, Plus, Trash2, Mail } from 'lucide-react'
