@@ -8,6 +8,7 @@ import {
   Plus, Search, Filter, Download, Trash2, Pencil,
   Sun, Moon, LogOut, ShieldCheck, ChevronUp, ChevronDown,
   RefreshCw, X, CheckSquare, Square, Car, Hash, Wrench, UserCog, UserCheck, ListChecks,
+  Mail,
 } from 'lucide-react'
 import { serverTimestamp } from 'firebase/firestore'
 import { useAuth }      from '../hooks/useAuth'
@@ -20,6 +21,7 @@ import ReportModal      from '../components/ReportModal'
 import ConfirmDialog    from '../components/ConfirmDialog'
 import ImageModal       from '../components/ImageModal'
 import ModelManager     from '../components/ModelManager'
+import NotificationEmailManager from '../components/NotificationEmailManager'
 import PicManager       from '../components/PicManager'
 import PicPenjawabManager from '../components/PicPenjawabManager'
 import InspectionTypeManager from '../components/InspectionTypeManager'
@@ -67,6 +69,7 @@ export default function Dashboard() {
   const [imgSrc,   setImgSrc]   = useState(null)  // full-screen image src
   const [exportDialog, setExportDialog] = useState(false)
   const [showModelMgr, setShowModelMgr] = useState(false)
+  const [showNotificationMgr, setShowNotificationMgr] = useState(false)
   const [showPicMgr,   setShowPicMgr]   = useState(false)
   const [showPicPenjawabMgr, setShowPicPenjawabMgr] = useState(false)
   const [showInspectionTypeMgr, setShowInspectionTypeMgr] = useState(false)
@@ -269,6 +272,11 @@ export default function Dashboard() {
                 <Car className="w-4 h-4" />
               </button>
             )}
+            {user?.role === 'MASTER' && (
+              <button onClick={() => setShowNotificationMgr(true)} className="icon-btn" title="Manage Notification Emails">
+                <Mail className="w-4 h-4" />
+              </button>
+            )}
             {(user?.role === 'MASTER' || user?.role === 'QC') && (
               <button onClick={() => setShowInspectionTypeMgr(true)} className="icon-btn" title="Manage Inspection Type">
                 <ListChecks className="w-4 h-4" />
@@ -419,6 +427,9 @@ export default function Dashboard() {
 
       {showModelMgr && (
         <ModelManager onClose={() => setShowModelMgr(false)} />
+      )}
+      {showNotificationMgr && (
+        <NotificationEmailManager onClose={() => setShowNotificationMgr(false)} />
       )}
 
       {showInspectionTypeMgr && (
