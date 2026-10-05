@@ -538,39 +538,42 @@ function ReportRow({ report, rowNum, selected, onToggle, onEdit, onDelete, onVie
             </div>
           )}
           {(() => {
-            const cmBefore = report.countermeasureBefore || report.countermeasure || ''
-            const cmAfter  = report.countermeasureAfter || ''
+            // report.temporary / report.fix sudah dinormalisasi dari field
+            // lama (countermeasureBefore/After) di fetchReports(), jadi di
+            // sini cukup pakai nama baru langsung.
+            const temporary = report.temporary || ''
+            const fix       = report.fix || ''
             return (
               <>
-                {report.cause && (cmBefore || cmAfter) && (
+                {report.cause && (temporary || fix) && (
                   <div className="border-t border-steel-100 dark:border-steel-800" />
                 )}
-                {cmBefore && (
+                {temporary && (
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-steel-400 mb-0.5">Countermeasure (Before)</p>
-                    <p className="text-xs text-steel-700 dark:text-steel-300 whitespace-pre-line break-words">{cmBefore}</p>
-                    {report.cmBeforePositionImageUrl && (
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-steel-400 mb-0.5">Countermeasure (Temporary)</p>
+                    <p className="text-xs text-steel-700 dark:text-steel-300 whitespace-pre-line break-words">{temporary}</p>
+                    {report.temporaryPositionImageUrl && (
                       <div className="mt-1">
-                        <ImageCell layoutType={report.cmBeforeLayoutType} positionImageUrl={report.cmBeforePositionImageUrl} detailImageUrl={report.cmBeforeDetailImageUrl} onView={onViewImage} size="h-8" />
+                        <ImageCell layoutType={report.temporaryLayoutType} positionImageUrl={report.temporaryPositionImageUrl} detailImageUrl={report.temporaryDetailImageUrl} onView={onViewImage} size="h-8" />
                       </div>
                     )}
                   </div>
                 )}
-                {cmBefore && cmAfter && (
+                {temporary && fix && (
                   <div className="border-t border-steel-100 dark:border-steel-800" />
                 )}
-                {cmAfter && (
+                {fix && (
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-steel-400 mb-0.5">Countermeasure (After)</p>
-                    <p className="text-xs text-steel-700 dark:text-steel-300 whitespace-pre-line break-words">{cmAfter}</p>
-                    {report.cmAfterPositionImageUrl && (
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-steel-400 mb-0.5">Countermeasure (Fix)</p>
+                    <p className="text-xs text-steel-700 dark:text-steel-300 whitespace-pre-line break-words">{fix}</p>
+                    {report.fixPositionImageUrl && (
                       <div className="mt-1">
-                        <ImageCell layoutType={report.cmAfterLayoutType} positionImageUrl={report.cmAfterPositionImageUrl} detailImageUrl={report.cmAfterDetailImageUrl} onView={onViewImage} size="h-8" />
+                        <ImageCell layoutType={report.fixLayoutType} positionImageUrl={report.fixPositionImageUrl} detailImageUrl={report.fixDetailImageUrl} onView={onViewImage} size="h-8" />
                       </div>
                     )}
                   </div>
                 )}
-                {!report.cause && !cmBefore && !cmAfter && (
+                {!report.cause && !temporary && !fix && (
                   <span className="text-xs text-steel-300 dark:text-steel-600 italic">No details yet</span>
                 )}
               </>
