@@ -165,8 +165,8 @@ export async function exportToPDF(reports, options = {}) {
   )
   const allCmImages = await Promise.all(
     reports.map(r => Promise.all([
-      loadImage(r.cmBeforePositionImageUrl),
-      loadImage(r.cmAfterPositionImageUrl),
+      loadImage(r.temporaryPositionImageUrl),
+      loadImage(r.fixPositionImageUrl),
     ]))
   )
 
@@ -266,8 +266,8 @@ export async function exportToPDF(reports, options = {}) {
     doc.setFontSize(FS)
     const rowHeights = chunkReports.map((r, i) => {
       const cause     = (r.cause || '').trim()
-      const cmBefore  = (r.countermeasureBefore || r.countermeasure || '').trim()
-      const cmAfter   = (r.countermeasureAfter || '').trim()
+      const cmBefore  = (r.temporary || '').trim()
+      const cmAfter   = (r.fix || '').trim()
       const [cmBeforeImg, cmAfterImg] = chunkCmImages[i] || []
       const causeNeeded = causeContentHeight(cause)
       const cmNeeded    = cmContentHeight(cmBefore, cmAfter, !!cmBeforeImg, !!cmAfterImg)
@@ -419,8 +419,8 @@ export async function exportToPDF(reports, options = {}) {
         // gap separating the two blocks (matches the dashboard's before/after
         // pairing, just stacked instead of side-by-side).
         if (column.index === CI.cm) {
-          const cmBeforeText = (report.countermeasureBefore || report.countermeasure || '').trim()
-          const cmAfterText  = (report.countermeasureAfter || '').trim()
+          const cmBeforeText = (report.temporary || '').trim()
+          const cmAfterText  = (report.fix || '').trim()
           const [cmBeforeImg, cmAfterImg] = chunkCmImages[i] || []
 
           const x = cell.x + pad
@@ -457,8 +457,8 @@ export async function exportToPDF(reports, options = {}) {
           const beforeH = cmBlockHeight(cmBeforeText, !!cmBeforeImg)
           const afterH  = cmBlockHeight(cmAfterText, !!cmAfterImg)
 
-          drawBlock('C/M Before :', cmBeforeText, cmBeforeImg, cell.y + pad, beforeH)
-          drawBlock('C/M After :', cmAfterText, cmAfterImg, cell.y + pad + beforeH + gap, afterH)
+          drawBlock('C/M (Temporary) :', cmBeforeText, cmBeforeImg, cell.y + pad, beforeH)
+          drawBlock('C/M (Fix) :', cmAfterText, cmAfterImg, cell.y + pad + beforeH + gap, afterH)
           return
         }
 
