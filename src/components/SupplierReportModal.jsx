@@ -1,144 +1,664 @@
 /**
- * SupplierReportModal — satu komponen untuk tiga mode, tergantung role:
- *   - MASTER/QC: bisa isi semua field (mode create atau edit bebas).
- *   - SUPPLIER : hanya field Root Cause & Countermeasure yang bisa diedit;
- *                field lain tampil read-only.
- *   - ASSY     : semua field read-only (view only, tidak ada tombol simpan).
+ * SupplierReportModal — klon dari ReportModal.jsx untuk laporan supplier.
+ * Field dan tampilannya SAMA PERSIS dengan form laporan internal, kecuali:
+ *   - "Frame Number" diganti jadi "Part Number" (field Firestore tetap
+ *     `unitNo` di belakang layar, cuma labelnya yang beda).
+ *   - Ada field tambahan `supplierName`, dipilih QC/MASTER saat membuat
+ *     laporan, lalu dikunci (tidak bisa diubah lagi oleh siapa pun lewat UI
+ *     ini — juga dikunci di firestore.rules).
+ *   - Role ASSY di sini TIDAK bisa edit apa pun sama sekali (read-only
+ *     total), beda dari ASSY di laporan internal yang masih bisa isi Cause
+ *     & Countermeasure. Diatur lewat prop `forceReadOnly`.
+ *   - Role SUPPLIER di sini punya hak edit yang SAMA seperti ASSY di form
+ *     internal (Cause, Countermeasure Temporary/Fix + foto, Progress,
+ *     Verification, dll) — field dasar (Date, Part Number, Qty, Problem,
+ *     Verification, foto Problem, Supplier) tetap dikunci untuk SUPPLIER.
  */
-import React, { useState, useEffect } from 'react'
-import { X, Save } from 'lucide-react'
-import { useAuth } from '../hooks/useAuth'
+import React, { useState } from 'react'
+import { X, ImageIcon, Camera } from 'lucide-react'
+import QuadrantProgress from './QuadrantProgress'
+import ImageUploader from './ImageUploader'
+import BarcodeScannerModal from './BarcodeScannerModal'
+import { useModels } from '../hooks/useModels'
+import { useInspectionTypes } from '../hooks/useInspectionTypes'
+import { useLotsByModelName } from '../hooks/useLots'
+import { usePartsByModelName } from '../hooks/useParts'
+import { usePics } from '../hooks/usePics'
+import { usePicPenjawab } from '../hooks/usePicPenjawab'
 import { useSuppliers } from '../hooks/useSuppliers'
 
+// Helper: returns today's date as YYYY-MM-DD string (local time)
 function todayStr() {
   const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const yyyy = d.getFullYear()
+  const mm   = String(d.getMonth() + 1).padStart(2, '0')
+  const dd   = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
 }
 
-export default function SupplierReportModal({ report, onClose, onCreate, onSaveRootCause, onSaveFull }) {
-  const { user } = useAuth()
-  const { suppliers } = useSuppliers()
-  const isNew = !report
-  const canEditAll = user?.role === 'MASTER' || user?.role === 'QC'
-  const canEditOwn  = user?.role === 'SUPPLIER' && report?.supplierName === user.supplierName
-  const readOnly    = !canEditAll && !canEditOwn
+const RESPONSIBLE_OPTS = ['Process', 'Design', 'Supplier']
 
-  const [form, setForm] = useState({
-    unitNo: '', model: '', date: todayStr(), problem: '',
-    picCheck: user?.displayName || user?.email || '',
-    supplierName: '', rootCause: '', countermeasure: '',
+const EMPTY = {
+  date: todayStr(),
+  unitNo: '', problem: '', pic: '', picPenjawab: '', qty: 1, responsible: [], cause: '', temporary: '', fix: '',
+  progress: 0, verification: 0,
+  layoutType: null, positionImageUrl: null, detailImageUrl: null,
+  temporaryLayoutType: null, temporaryPositionImageUrl: null, temporaryDetailImageUrl: null,
+  fixLayoutType: null, fixPositionImageUrl: null, fixDetailImageUrl: null,
+  model: '',
+  inspectionType: '',
+  lot: '',
+  part: '',
+  supplierName: '',
+}
+
+export default function SupplierReportModal({ report = null, user, onSave, onClose }) {
+
+  // QC/MASTER: edit semua field (sama seperti laporan internal).
+  const isQC =
+    user?.role === 'QC' ||
+    user?.role === 'MASTER'
+
+  // ASSY: lihat laporan supplier TAPI tidak bisa edit apa pun sama sekali
+  // (beda dari ASSY di laporan internal yang masih bisa isi Cause/Countermeasure).
+  const forceReadOnly = user?.role === 'ASSY'
+
+  // SUPPLIER (pemilik laporan ini): hak edit setara ASSY di laporan internal —
+  // boleh isi Cause, Countermeasure (Temporary/Fix) + foto, Qty, Responsible,
+  // PIC Penjawab, Progress, Verification. Field dasar (Date, Part Number,
+  // Problem, foto Problem, Supplier) tetap terkunci.
+  const isSupplierOwner = user?.role === 'SUPPLIER' && (!report || report.supplierName === user.supplierName)
+
+  // Field yang "terbuka" (Cause/Countermeasure/Qty/Responsible/PIC
+  // Penjawab/Progress/Verification) — boleh diedit QC/MASTER atau Supplier
+  // pemilik laporan, tapi TIDAK oleh ASSY (read-only total).
+  const canEditOpen = !forceReadOnly && (isQC || isSupplierOwner)
+
+  const { models } = useModels()
+  const { inspectionTypes } = useInspectionTypes()
+  const { pics }   = usePics()
+  const { picPenjawabList } = usePicPenjawab()
+  const { suppliers } = useSuppliers()
+  const isEdit = !!report
+  const [form, setForm]       = useState(isEdit
+    ? {
+        date: report.date || todayStr(),
+        qty: report.qty ?? 1,
+        responsible: report.responsible || [],
+        ...report,
+        // Fall back to the old single `countermeasure` field for reports
+        // saved before the before/after split, so existing data isn't lost.
+        temporary: report.temporary ?? report.countermeasureBefore ?? report.countermeasure ?? '',
+        fix:       report.fix       ?? report.countermeasureAfter  ?? '',
+      }
+    : { ...EMPTY })
+  const { lots } = useLotsByModelName(form.model)
+  const { parts } = usePartsByModelName(form.model)
+  const [imageTarget, setImageTarget] = useState(null) // null | 'problem' | 'temporary' | 'fix'
+  const [saving, setSaving]   = useState(false)
+  const [showScanner, setShowScanner] = useState(false)
+
+  const set = (key, val) => setForm(f => {
+    if (key === 'model') return { ...f, model: val, lot: '', part: '' }
+    return { ...f, [key]: val }
   })
 
-  useEffect(() => {
-    if (report) {
-      setForm({
-        unitNo: report.unitNo || '',
-        model: report.model || '',
-        date: report.date || '',
-        problem: report.problem || '',
-        picCheck: report.picCheck || '',
-        supplierName: report.supplierName || '',
-        rootCause: report.rootCause || '',
-        countermeasure: report.countermeasure || '',
-      })
-    }
-  }, [report])
-
-  const set = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }))
-
-  const handleSave = async () => {
-    if (isNew) {
-      if (!form.unitNo || !form.problem || !form.supplierName) return
-      await onCreate(form)
-    } else if (canEditOwn) {
-      await onSaveRootCause(report.id, { rootCause: form.rootCause, countermeasure: form.countermeasure })
-    } else if (canEditAll) {
-      await onSaveFull(report.id, form)
-    }
+  const handleSubmit = async (e) => {
+    e?.preventDefault()
+    if (forceReadOnly) return // ASSY: read-only total, tidak bisa submit
+    if (!form.unitNo.trim()) return
+    if (!isEdit && !form.supplierName) return // wajib pilih supplier saat membuat baru
+    setSaving(true)
+    await onSave(form)
+    setSaving(false)
     onClose()
   }
 
-  const lockedField = canEditOwn // Supplier: field dasar dikunci
+  // Field-name prefixes per image target, so the same ImageUploader modal
+  // can be reused for Problem, Countermeasure Before, and Countermeasure After.
+  const IMAGE_KEYS = {
+    problem:  { layout: 'layoutType',           position: 'positionImageUrl',           detail: 'detailImageUrl' },
+    temporary: { layout: 'temporaryLayoutType', position: 'temporaryPositionImageUrl', detail: 'temporaryDetailImageUrl' },
+    fix:       { layout: 'fixLayoutType',       position: 'fixPositionImageUrl',       detail: 'fixDetailImageUrl' },
+  }
+
+  const handleImageSave = (imgData) => {
+    const keys = IMAGE_KEYS[imageTarget]
+    setForm(f => ({
+      ...f,
+      [keys.layout]:   imgData.layoutType,
+      [keys.position]: imgData.positionImageUrl,
+      [keys.detail]:   imgData.detailImageUrl,
+    }))
+    setImageTarget(null)
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-white dark:bg-steel-900 rounded-2xl shadow-2xl w-full max-w-lg border border-steel-200 dark:border-steel-700 animate-slide-up max-h-[90vh] overflow-y-auto">
+    <>
+      <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+        <div className="bg-white dark:bg-steel-900 rounded-2xl shadow-2xl w-full max-w-2xl border border-steel-200 dark:border-steel-700 animate-slide-up">
 
-        <div className="flex items-center justify-between px-6 py-4 border-b border-steel-200 dark:border-steel-700 sticky top-0 bg-white dark:bg-steel-900">
-          <h2 className="font-semibold text-steel-900 dark:text-steel-100">
-            {isNew ? 'Laporan Supplier Baru' : (readOnly ? 'Detail Laporan' : 'Edit Laporan')}
-          </h2>
-          <button onClick={onClose} className="icon-btn"><X className="w-5 h-5" /></button>
-        </div>
-
-        <div className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="field-label">Frame Number</label>
-              <input className="field-input w-full" value={form.unitNo} onChange={set('unitNo')}
-                disabled={!isNew && (lockedField || readOnly)} />
-            </div>
-            <div>
-              <label className="field-label">Model</label>
-              <input className="field-input w-full" value={form.model} onChange={set('model')}
-                disabled={!isNew && (lockedField || readOnly)} />
-            </div>
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-steel-200 dark:border-steel-700">
+            <h2 className="font-semibold text-steel-900 dark:text-steel-100">
+              {forceReadOnly ? 'Detail Laporan Supplier' : isEdit ? 'Edit Laporan Supplier' : 'Laporan Supplier Baru'}
+            </h2>
+            <button onClick={onClose} className="icon-btn"><X className="w-5 h-5" /></button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+
+            {/* ── Input Unit Kendaraan ───────────────────────────────── */}
+            <p className="text-xs font-semibold uppercase tracking-wider text-accent">
+              Input Unit Kendaraan
+            </p>
+
+            {/* Date */}
             <div>
-              <label className="field-label">Tanggal</label>
-              <input type="date" className="field-input w-full" value={form.date} onChange={set('date')}
-                disabled={!isNew && (lockedField || readOnly)} />
+              <label className="field-label">Date *</label>
+              <input
+                type="date"
+                className="field-input"
+                value={form.date || ''}
+                onChange={e => set('date', e.target.value)}
+                disabled={!isQC}
+                required
+              />
             </div>
+
+            {/* Inspection Type — QC/MASTER only, radio buttons */}
+            {isQC && (
+              <div>
+                <label className="field-label">Inspection Type</label>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {inspectionTypes.map(t => {
+                    const active = form.inspectionType === t.name
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => set('inspectionType', t.name)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all
+                          ${active
+                            ? 'bg-accent text-white border-accent'
+                            : 'bg-steel-50 dark:bg-steel-800 border-steel-200 dark:border-steel-700 text-steel-700 dark:text-steel-300 hover:border-accent/60'
+                          }`}
+                      >
+                        {t.name}
+                      </button>
+                    )
+                  })}
+                  {inspectionTypes.length === 0 && (
+                    <p className="text-xs text-steel-400">Belum ada Inspection Type tersedia.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Model — QC/MASTER only, radio buttons */}
+            {isQC && (
+              <div>
+                <label className="field-label">Model</label>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {models.map(m => {
+                    const active = form.model === m.name
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => set('model', m.name)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all
+                          ${active
+                            ? 'bg-accent text-white border-accent'
+                            : 'bg-steel-50 dark:bg-steel-800 border-steel-200 dark:border-steel-700 text-steel-700 dark:text-steel-300 hover:border-accent/60'
+                          }`}
+                      >
+                        {m.name}
+                      </button>
+                    )
+                  })}
+                  {models.length === 0 && (
+                    <p className="text-xs text-steel-400">Belum ada model tersedia.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Lot — hanya muncul setelah model dipilih */}
+            {isQC && form.model && (
+              <div>
+                <label className="field-label">Lot</label>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {lots.map(l => {
+                    const active = form.lot === l.name
+                    return (
+                      <button
+                        key={l.id}
+                        type="button"
+                        onClick={() => set('lot', l.name)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all
+                          ${active
+                            ? 'bg-accent text-white border-accent'
+                            : 'bg-steel-50 dark:bg-steel-800 border-steel-200 dark:border-steel-700 text-steel-700 dark:text-steel-300 hover:border-accent/60'
+                          }`}
+                      >
+                        {l.name}
+                      </button>
+                    )
+                  })}
+                  {lots.length === 0 && (
+                    <p className="text-xs text-steel-400">Belum ada lot untuk model ini.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Part Number (dulu "Frame Number" di laporan internal) */}
             <div>
-              <label className="field-label">Supplier</label>
-              {isNew ? (
-                <select className="field-input w-full" value={form.supplierName} onChange={set('supplierName')}>
-                  <option value="">Pilih supplier…</option>
-                  {suppliers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                </select>
+              <label className="field-label">Part Number *</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="field-input font-mono flex-1"
+                  placeholder="e.g. PN-10234, 90119-A0123"
+                  value={form.unitNo}
+                  onChange={e => set('unitNo', e.target.value)}
+                  disabled={!isQC}
+                  required
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  disabled={!isQC}
+                  onClick={() => setShowScanner(true)}
+                  className="shrink-0 px-3 rounded-lg border border-steel-200 dark:border-steel-700 hover:bg-steel-50 dark:hover:bg-steel-800 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Scan barcode dengan kamera"
+                  aria-label="Scan barcode Part Number dengan kamera"
+                >
+                  <Camera className="w-4 h-4 text-accent" />
+                </button>
+              </div>
+            </div>
+
+            {/* Supplier — dipilih QC/MASTER saat membuat laporan, lalu dikunci */}
+            <div>
+              <label className="field-label">Supplier *</label>
+              {isEdit ? (
+                <input className="field-input" value={form.supplierName} disabled />
               ) : (
-                <input className="field-input w-full" value={form.supplierName} disabled />
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {suppliers.map(s => {
+                    const active = form.supplierName === s.name
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => set('supplierName', s.name)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all
+                          ${active
+                            ? 'bg-accent text-white border-accent'
+                            : 'bg-steel-50 dark:bg-steel-800 border-steel-200 dark:border-steel-700 text-steel-700 dark:text-steel-300 hover:border-accent/60'
+                          }`}
+                      >
+                        {s.name}
+                      </button>
+                    )
+                  })}
+                  {suppliers.length === 0 && (
+                    <p className="text-xs text-steel-400">Belum ada supplier. Tambahkan lewat menu Manage Suppliers.</p>
+                  )}
+                </div>
               )}
             </div>
-          </div>
 
-          <div>
-            <label className="field-label">Problem</label>
-            <textarea className="field-input w-full" rows={2} value={form.problem} onChange={set('problem')}
-              disabled={!isNew && (lockedField || readOnly)} />
-          </div>
+            <BarcodeScannerModal
+              open={showScanner}
+              onClose={() => setShowScanner(false)}
+              onScan={(text) => {
+                set('unitNo', text)
+                setShowScanner(false)
+              }}
+            />
 
-          <div>
-            <label className="field-label">PIC Check</label>
-            <input className="field-input w-full" value={form.picCheck} onChange={set('picCheck')}
-              disabled={!isNew && (lockedField || readOnly)} />
-          </div>
+            {/* ── Input Part ─────────────────────────────────────────── */}
+            {isQC && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-accent mb-2">
+                  Input Part
+                </p>
+                {!form.model && (
+                  <p className="text-xs text-steel-400">Pilih Model terlebih dahulu di atas.</p>
+                )}
+                {form.model && (
+                  <>
+                    <label className="field-label">Part</label>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {parts.map(p => {
+                        const active = form.part === p.name
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => set('part', p.name)}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all
+                              ${active
+                                ? 'bg-accent text-white border-accent'
+                                : 'bg-steel-50 dark:bg-steel-800 border-steel-200 dark:border-steel-700 text-steel-700 dark:text-steel-300 hover:border-accent/60'
+                              }`}
+                          >
+                            {p.name}
+                          </button>
+                        )
+                      })}
+                      {parts.length === 0 && (
+                        <p className="text-xs text-steel-400">Belum ada part untuk model ini.</p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
-          <div className="pt-3 border-t border-steel-200 dark:border-steel-700 space-y-4">
+            {/* Images */}
             <div>
-              <label className="field-label text-accent">Root Cause {canEditOwn && '(bisa diisi)'}</label>
-              <textarea className="field-input w-full" rows={3} value={form.rootCause} onChange={set('rootCause')}
-                disabled={isNew || (!canEditAll && !canEditOwn)}
-                placeholder={isNew ? 'Diisi setelah laporan dibuat' : ''} />
+              <label className="field-label">Images</label>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  type="button"
+                  disabled={!isQC}
+                  onClick={() => {
+                    if (isQC) {
+                      setImageTarget('problem')
+                    }
+                  }}
+                  className="btn-ghost flex items-center gap-2"
+                >
+                  <Camera className="w-4 h-4" />
+                  {form.positionImageUrl ? 'Change Images' : 'Add Images'}
+                </button>
+                {/* Tiny previews */}
+                {form.positionImageUrl && (
+                  <div className="flex gap-2">
+                    <img src={form.positionImageUrl} alt="position"
+                         className={`object-cover rounded border border-steel-200 dark:border-steel-700
+                           ${form.layoutType === 'single' ? 'h-10 aspect-video' : 'h-10 w-10'}`} />
+                    {form.layoutType === 'dual' && form.detailImageUrl && (
+                      <img src={form.detailImageUrl} alt="detail"
+                           className="h-10 w-10 object-cover rounded border border-steel-200 dark:border-steel-700" />
+                    )}
+                  </div>
+                )}
+                {!form.positionImageUrl && (
+                  <span className="text-xs text-steel-400 flex items-center gap-1">
+                    <ImageIcon className="w-3 h-3" /> No images yet
+                  </span>
+                )}
+              </div>
             </div>
-            <div>
-              <label className="field-label text-accent">Countermeasure {canEditOwn && '(bisa diisi)'}</label>
-              <textarea className="field-input w-full" rows={3} value={form.countermeasure} onChange={set('countermeasure')}
-                disabled={isNew || (!canEditAll && !canEditOwn)}
-                placeholder={isNew ? 'Diisi setelah laporan dibuat' : ''} />
-            </div>
-          </div>
 
-          {!readOnly && (
-            <button type="button" onClick={handleSave} className="btn-primary w-full flex items-center justify-center gap-2">
-              <Save className="w-4 h-4" />
-              Simpan
+            {/* Problem */}
+            <div>
+              <label className="field-label">
+                Problem
+              </label>
+            
+              <textarea
+                className="field-input"
+                rows={3}
+                value={form.problem}
+                disabled={!isQC}
+                onChange={e => set('problem', e.target.value)}
+                placeholder="Describe the problem"
+              />
+
+              {/* PIC Check — who filled in this Problem (QC). Shown right under Problem,
+                  not as a separate table column, and excluded from PDF export.
+                  Rendered as inline choice buttons (not a dropdown) since the
+                  PIC Check list is expected to stay short. */}
+              <div className="mt-2">
+                <label className="field-label">PIC Check</label>
+                <div className="flex items-center gap-2 flex-wrap mt-1">
+                  {pics.length === 0 && (
+                    <p className="text-xs text-steel-400">Belum ada PIC Check. Tambahkan lewat menu Manage PIC Check.</p>
+                  )}
+                  {pics.map(p => {
+                    const isActive = form.pic === p.name
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        disabled={!isQC}
+                        onClick={() => set('pic', isActive ? '' : p.name)}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium border transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed
+                          ${isActive
+                            ? 'bg-accent border-accent text-white'
+                            : 'bg-steel-50 dark:bg-steel-800 border-steel-200 dark:border-steel-700 text-steel-600 dark:text-steel-300 hover:border-steel-400 dark:hover:border-steel-500'
+                          }`}
+                      >
+                        {p.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Qty */}
+            <div>
+              <label className="field-label">Qty</label>
+              <select
+                className="field-input"
+                value={form.qty ?? 1}
+                disabled={!canEditOpen}
+                onChange={e => set('qty', Number(e.target.value))}
+              >
+                {Array.from({ length: 20 }, (_, i) => i + 1).map(n => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Responsible (multi-select) */}
+            <div>
+              <label className="field-label">Responsible</label>
+              <div className="flex items-center gap-2 flex-wrap mt-1">
+                {RESPONSIBLE_OPTS.map(opt => {
+                  const isActive = (form.responsible || []).includes(opt)
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      disabled={!canEditOpen}
+                      onClick={() => {
+                        const current = form.responsible || []
+                        const next = isActive
+                          ? current.filter(r => r !== opt)
+                          : [...current, opt]
+                        set('responsible', next)
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all
+                        ${isActive
+                          ? opt === 'Process'
+                            ? 'bg-blue-500 border-blue-500 text-white'
+                            : opt === 'Design'
+                            ? 'bg-violet-500 border-violet-500 text-white'
+                            : 'bg-amber-500 border-amber-500 text-white'
+                          : 'bg-steel-50 dark:bg-steel-800 border-steel-200 dark:border-steel-700 text-steel-600 dark:text-steel-300 hover:border-steel-400 dark:hover:border-steel-500'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      {opt}
+                    </button>
+                  )
+                })}
+              </div>
+              {(form.responsible || []).length === 0 && (
+                <p className="text-xs text-steel-400 mt-1.5">Pilih satu atau lebih pihak yang bertanggung jawab</p>
+              )}
+            </div>
+
+            {/* PIC Penjawab — separate master list from PIC Check (its own collection),
+                editable by ASSY as well (not gated by isQC), placed right under Responsible. */}
+            <div>
+              <label className="field-label">PIC Penjawab</label>
+              <div className="flex items-center gap-2 flex-wrap mt-1">
+                {picPenjawabList.length === 0 && (
+                  <p className="text-xs text-steel-400">Belum ada PIC Penjawab. Tambahkan lewat menu Manage PIC Penjawab.</p>
+                )}
+                {picPenjawabList.map(p => {
+                  const isActive = form.picPenjawab === p.name
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      disabled={!canEditOpen}
+                      onClick={() => set('picPenjawab', isActive ? '' : p.name)}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium border transition-all whitespace-nowrap
+                        ${isActive
+                          ? 'bg-accent border-accent text-white'
+                          : 'bg-steel-50 dark:bg-steel-800 border-steel-200 dark:border-steel-700 text-steel-600 dark:text-steel-300 hover:border-steel-400 dark:hover:border-steel-500'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      {p.name}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            
+            {/* Cause */}
+            <div>
+              <label className="field-label">Cause</label>
+              <textarea
+                className="field-input min-h-[72px] resize-none"
+                placeholder="Describe the root cause…"
+                value={form.cause}
+                disabled={!canEditOpen}
+                onChange={e => set('cause', e.target.value)}
+              />
+            </div>
+
+            {/* Countermeasure — Temporary / Fix */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="field-label">Countermeasure (Temporary)</label>
+                <textarea
+                  className="field-input min-h-[72px] resize-none"
+                  placeholder="Condition/action before…"
+                  value={form.temporary}
+                  disabled={!canEditOpen}
+                  onChange={e => set('temporary', e.target.value)}
+                />
+                <div className="flex items-center gap-3 flex-wrap mt-2">
+                  <button
+                    type="button"
+                    disabled={!canEditOpen}
+                    onClick={() => { if (canEditOpen) setImageTarget('temporary') }}
+                    className="btn-ghost flex items-center gap-2"
+                  >
+                    <Camera className="w-4 h-4" />
+                    {form.temporaryPositionImageUrl ? 'Change Images' : 'Add Images'}
+                  </button>
+                  {form.temporaryPositionImageUrl ? (
+                    <div className="flex gap-2">
+                      <img src={form.temporaryPositionImageUrl} alt="temporary"
+                           className={`object-cover rounded border border-steel-200 dark:border-steel-700
+                             ${form.temporaryLayoutType === 'single' ? 'h-10 aspect-video' : 'h-10 w-10'}`} />
+                      {form.temporaryLayoutType === 'dual' && form.temporaryDetailImageUrl && (
+                        <img src={form.temporaryDetailImageUrl} alt="temporary detail"
+                             className="h-10 w-10 object-cover rounded border border-steel-200 dark:border-steel-700" />
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-steel-400 flex items-center gap-1">
+                      <ImageIcon className="w-3 h-3" /> No images yet
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="field-label">Countermeasure (Fix)</label>
+                <textarea
+                  className="field-input min-h-[72px] resize-none"
+                  placeholder="Condition/action after…"
+                  value={form.fix}
+                  disabled={!canEditOpen}
+                  onChange={e => set('fix', e.target.value)}
+                />
+                <div className="flex items-center gap-3 flex-wrap mt-2">
+                  <button
+                    type="button"
+                    disabled={!canEditOpen}
+                    onClick={() => { if (canEditOpen) setImageTarget('fix') }}
+                    className="btn-ghost flex items-center gap-2"
+                  >
+                    <Camera className="w-4 h-4" />
+                    {form.fixPositionImageUrl ? 'Change Images' : 'Add Images'}
+                  </button>
+                  {form.fixPositionImageUrl ? (
+                    <div className="flex gap-2">
+                      <img src={form.fixPositionImageUrl} alt="fix"
+                           className={`object-cover rounded border border-steel-200 dark:border-steel-700
+                             ${form.fixLayoutType === 'single' ? 'h-10 aspect-video' : 'h-10 w-10'}`} />
+                      {form.fixLayoutType === 'dual' && form.fixDetailImageUrl && (
+                        <img src={form.fixDetailImageUrl} alt="fix detail"
+                             className="h-10 w-10 object-cover rounded border border-steel-200 dark:border-steel-700" />
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-steel-400 flex items-center gap-1">
+                      <ImageIcon className="w-3 h-3" /> No images yet
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Progress & Verification */}
+            <div className="grid grid-cols-2 gap-6">
+              <div className="flex flex-col items-center gap-2">
+                <label className="field-label text-center">Progress</label>
+                <QuadrantProgress value={form.progress} onChange={v => set('progress', v)} readonly={!canEditOpen} size={56} />
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <label className="field-label text-center">Countermeasure Verification</label>
+                {/* Verification dikunci untuk Supplier juga (sama seperti
+                    ASSY di laporan internal) — hanya QC/MASTER yang bisa ubah. */}
+                <QuadrantProgress value={form.verification} onChange={v => set('verification', v)} readonly={!isQC} size={56} labels={['NG', 'OK']} maxValue={1} />
+              </div>
+            </div>
+
+          </form>
+
+          {/* Footer */}
+          <div className="px-6 py-4 border-t border-steel-200 dark:border-steel-700 flex justify-end gap-3">
+            <button type="button" onClick={onClose} className="btn-ghost">
+              {forceReadOnly ? 'Close' : 'Cancel'}
             </button>
-          )}
+            {!forceReadOnly && (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={!form.unitNo.trim() || (!isEdit && !form.supplierName) || saving}
+                className="btn-primary disabled:opacity-50"
+              >
+                {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Report'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      {imageTarget && (
+        <ImageUploader
+          initial={{
+            layoutType:       form[IMAGE_KEYS[imageTarget].layout],
+            positionImageUrl: form[IMAGE_KEYS[imageTarget].position],
+            detailImageUrl:   form[IMAGE_KEYS[imageTarget].detail],
+          }}
+          onSave={handleImageSave}
+          onClose={() => setImageTarget(null)}
+        />
+      )}
+    </>
   )
 }
