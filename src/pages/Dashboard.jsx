@@ -28,6 +28,8 @@ import InspectionTypeManager from '../components/InspectionTypeManager'
 import { useModels }    from '../hooks/useModels'
 import { useInspectionTypes } from '../hooks/useInspectionTypes'
 import LotManager       from '../components/LotManager'
+import { Navigate, Link } from 'react-router-dom'
+import { Factory } from 'lucide-react'
 import { useLotsByModelName } from '../hooks/useLots'
 import PartManager      from '../components/PartManager'
 import toast            from 'react-hot-toast'
@@ -172,6 +174,14 @@ export default function Dashboard() {
     })
   }
 
+  // Akun Supplier tidak punya akses ke Dashboard internal ini sama sekali —
+  // langsung dialihkan ke halaman Supplier Reports mereka sendiri. Dicek di
+  // sini (bukan di awal komponen) supaya semua Hook di atas tetap terpanggil
+  // secara konsisten setiap render, sesuai Rules of Hooks React.
+  if (user?.role === 'SUPPLIER') {
+    return <Navigate to="/suppliers" replace />
+  }
+
   return (
     <div className="min-h-screen bg-steel-50 dark:bg-steel-950 flex flex-col">
 
@@ -272,6 +282,9 @@ export default function Dashboard() {
                 <Car className="w-4 h-4" />
               </button>
             )}
+            <Link to="/suppliers" className="icon-btn" title="Supplier Reports">
+              <Factory className="w-4 h-4" />
+            </Link>
             {(user?.role === 'MASTER' || user?.role === 'QC') && (
               <button onClick={() => setShowNotificationMgr(true)} className="icon-btn" title="Manage Notification Emails">
                 <Mail className="w-4 h-4" />
