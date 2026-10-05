@@ -23,30 +23,56 @@ export async function createReport(data) {
     qty:              data.qty              ?? 1,
     responsible:      data.responsible      || [],
     cause:            data.cause            || '',
-    countermeasureBefore: data.countermeasureBefore || '',
-    countermeasureAfter:  data.countermeasureAfter  || '',
+    // "Temporary" / "Fix" — nama tampilan baru untuk yang dulunya
+    // Countermeasure (Before)/(After). Field Firestore JUGA diganti nama
+    // (temporary/fix), TAPI laporan lama yang masih pakai nama field lama
+    // (countermeasureBefore/countermeasureAfter) tidak disentuh/dihapus —
+    // lihat fetchReports() di bawah untuk kompatibilitas baca data lama.
+    temporary:        data.temporary        || '',
+    fix:              data.fix              || '',
     progress:         data.progress         ?? 0,
     progressTimestamps: data.progressTimestamps || {},
     verification:     data.verification     ?? 0,
     layoutType:       data.layoutType       || 'single',
     positionImageUrl: data.positionImageUrl || null,
     detailImageUrl:   data.detailImageUrl   || null,
-    cmBeforeLayoutType:       data.cmBeforeLayoutType       || null,
-    cmBeforePositionImageUrl: data.cmBeforePositionImageUrl || null,
-    cmBeforeDetailImageUrl:   data.cmBeforeDetailImageUrl   || null,
-    cmAfterLayoutType:        data.cmAfterLayoutType        || null,
-    cmAfterPositionImageUrl:  data.cmAfterPositionImageUrl  || null,
-    cmAfterDetailImageUrl:    data.cmAfterDetailImageUrl    || null,
+    temporaryLayoutType:       data.temporaryLayoutType       || null,
+    temporaryPositionImageUrl: data.temporaryPositionImageUrl || null,
+    temporaryDetailImageUrl:   data.temporaryDetailImageUrl   || null,
+    fixLayoutType:             data.fixLayoutType             || null,
+    fixPositionImageUrl:       data.fixPositionImageUrl       || null,
+    fixDetailImageUrl:         data.fixDetailImageUrl         || null,
     createdAt:        serverTimestamp(),
     updatedAt:        serverTimestamp(),
   })
 }
 
 // ── Read ──────────────────────────────────────────────────────────────────────
+// Laporan lama (dibuat sebelum rename Countermeasure Before/After →
+// Temporary/Fix) masih tersimpan dengan nama field lama di Firestore.
+// Di sini kita "terjemahkan" ke nama field baru saat dibaca, supaya seluruh
+// kode lain (Dashboard, ReportModal, pdfExport) cukup pakai report.temporary
+// / report.fix saja — tidak perlu tahu field mana yang dipakai dokumen itu.
+// Field lama TIDAK dihapus dari objek yang dikembalikan, jadi apa pun yang
+// kebetulan masih merujuknya tidak akan rusak.
+function normalizeCountermeasureFields(data) {
+  return {
+    ...data,
+    temporary: data.temporary ?? data.countermeasureBefore ?? data.countermeasure ?? '',
+    fix:       data.fix       ?? data.countermeasureAfter  ?? '',
+    temporaryLayoutType:       data.temporaryLayoutType       ?? data.cmBeforeLayoutType       ?? null,
+    temporaryPositionImageUrl: data.temporaryPositionImageUrl ?? data.cmBeforePositionImageUrl ?? null,
+    temporaryDetailImageUrl:   data.temporaryDetailImageUrl   ?? data.cmBeforeDetailImageUrl   ?? null,
+    fixLayoutType:             data.fixLayoutType             ?? data.cmAfterLayoutType        ?? null,
+    fixPositionImageUrl:       data.fixPositionImageUrl       ?? data.cmAfterPositionImageUrl  ?? null,
+    fixDetailImageUrl:         data.fixDetailImageUrl         ?? data.cmAfterDetailImageUrl    ?? null,
+  }
+}
+
 export async function fetchReports() {
   const q   = query(collection(db, COL), orderBy('createdAt', 'desc'))
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return snap.docs.map(d => ({ id: d.id, ...normalizeCountermeasureFields(d.data()) }))
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────
