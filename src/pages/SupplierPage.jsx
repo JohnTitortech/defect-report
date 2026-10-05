@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Navigate, Link } from 'react-router-dom'
+import { serverTimestamp } from 'firebase/firestore'
 import { ArrowLeft, Plus, Factory, LogOut, RefreshCw } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useSupplierReports } from '../hooks/useSupplierReports'
@@ -7,20 +8,29 @@ import SupplierReportModal from '../components/SupplierReportModal'
 import SupplierManager from '../components/SupplierManager'
 
 function StatusBadge({ report }) {
-  const done = report.rootCause && report.countermeasure
+  const done = (report.progress ?? 0) >= 4 && (report.verification ?? 0) >= 1
   return (
     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full
       ${done
         ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400'
         : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
-      {done ? 'Selesai' : 'Menunggu Supplier'}
+      {done ? 'Selesai' : 'Berjalan'}
     </span>
   )
 }
 
+// Sama seperti stampField di Dashboard.jsx — catat kapan progress/verification
+// pertama kali mencapai suatu nilai, dipakai untuk histori/jejak waktu.
+function stampField(existingTimestamps, value) {
+  if (!value) return existingTimestamps || {}
+  const key = String(value)
+  if (existingTimestamps?.[key]) return existingTimestamps
+  return { ...(existingTimestamps || {}), [key]: serverTimestamp() }
+}
+
 export default function SupplierPage() {
   const { user, logOut } = useAuth()
-  const { reports, loading, createReport, updateRootCause, updateReport } = useSupplierReports()
+  const { reports, loading, createReport, updateReport } = useSupplierReports()
   const [selected, setSelected] = useState(null) // report sedang dibuka, atau 'new'
   const [showSupplierMgr, setShowSupplierMgr] = useState(false)
 
@@ -28,6 +38,19 @@ export default function SupplierPage() {
 
   const isInternal = user.role === 'MASTER' || user.role === 'QC' || user.role === 'ASSY'
   const canCreate = user.role === 'MASTER' || user.role === 'QC'
+
+  // Satu handler untuk create & edit, sama seperti handleSave di Dashboard.jsx.
+  const handleSave = async (form) => {
+    const isNew = selected === 'new'
+    const existing = isNew ? null : selected
+    const payload = {
+      ...form,
+      progressTimestamps:     stampField(existing?.progressTimestamps, form.progress),
+      verificationTimestamps: stampField(existing?.verificationTimestamps, form.verification),
+    }
+    if (isNew) await createReport(payload)
+    else await updateReport(existing.id, payload)
+  }
 
   return (
     <div className="min-h-screen bg-steel-50 dark:bg-steel-950">
@@ -79,11 +102,11 @@ export default function SupplierPage() {
         )}
 
         {!loading && reports.length > 0 && (
-          <div className="bg-white dark:bg-steel-900 rounded-xl border border-steel-200 dark:border-steel-700 overflow-hidden">
+          <div className="bg-white dark:bg-steel-900 rounded-xl border border-steel-200 dark:border-steel-700 overflow-hidden overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-steel-50 dark:bg-steel-800 text-steel-500 dark:text-steel-400 text-xs uppercase">
                 <tr>
-                  <th className="text-left px-4 py-2">Frame Number</th>
+                  <th className="text-left px-4 py-2">Part Number</th>
                   <th className="text-left px-4 py-2">Model</th>
                   <th className="text-left px-4 py-2">Supplier</th>
                   <th className="text-left px-4 py-2">Problem</th>
@@ -111,10 +134,9 @@ export default function SupplierPage() {
       {selected && (
         <SupplierReportModal
           report={selected === 'new' ? null : selected}
+          user={user}
           onClose={() => setSelected(null)}
-          onCreate={createReport}
-          onSaveRootCause={updateRootCause}
-          onSaveFull={updateReport}
+          onSave={handleSave}
         />
       )}
 
