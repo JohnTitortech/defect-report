@@ -26,11 +26,11 @@ const RESPONSIBLE_OPTS = ['Process', 'Design', 'Supplier']
 
 const EMPTY = {
   date: todayStr(),
-  unitNo: '', problem: '', pic: '', picPenjawab: '', qty: 1, responsible: [], cause: '', countermeasureBefore: '', countermeasureAfter: '',
+  unitNo: '', problem: '', pic: '', picPenjawab: '', qty: 1, responsible: [], cause: '', temporary: '', fix: '',
   progress: 0, verification: 0,
   layoutType: null, positionImageUrl: null, detailImageUrl: null,
-  cmBeforeLayoutType: null, cmBeforePositionImageUrl: null, cmBeforeDetailImageUrl: null,
-  cmAfterLayoutType: null, cmAfterPositionImageUrl: null, cmAfterDetailImageUrl: null,
+  temporaryLayoutType: null, temporaryPositionImageUrl: null, temporaryDetailImageUrl: null,
+  fixLayoutType: null, fixPositionImageUrl: null, fixDetailImageUrl: null,
   model: '',
   inspectionType: '',
   lot: '',
@@ -56,13 +56,13 @@ export default function ReportModal({ report = null, user, onSave, onClose }) {
         ...report,
         // Fall back to the old single `countermeasure` field for reports
         // saved before the before/after split, so existing data isn't lost.
-        countermeasureBefore: report.countermeasureBefore ?? report.countermeasure ?? '',
-        countermeasureAfter:  report.countermeasureAfter  ?? '',
+        temporary: report.temporary ?? report.countermeasureBefore ?? report.countermeasure ?? '',
+        fix:       report.fix       ?? report.countermeasureAfter  ?? '',
       }
     : { ...EMPTY })
   const { lots } = useLotsByModelName(form.model)
   const { parts } = usePartsByModelName(form.model)
-  const [imageTarget, setImageTarget] = useState(null) // null | 'problem' | 'cmBefore' | 'cmAfter'
+  const [imageTarget, setImageTarget] = useState(null) // null | 'problem' | 'temporary' | 'fix'
   const [saving, setSaving]   = useState(false)
   const [showScanner, setShowScanner] = useState(false)
 
@@ -84,8 +84,8 @@ export default function ReportModal({ report = null, user, onSave, onClose }) {
   // can be reused for Problem, Countermeasure Before, and Countermeasure After.
   const IMAGE_KEYS = {
     problem:  { layout: 'layoutType',           position: 'positionImageUrl',           detail: 'detailImageUrl' },
-    cmBefore: { layout: 'cmBeforeLayoutType',    position: 'cmBeforePositionImageUrl',    detail: 'cmBeforeDetailImageUrl' },
-    cmAfter:  { layout: 'cmAfterLayoutType',     position: 'cmAfterPositionImageUrl',     detail: 'cmAfterDetailImageUrl' },
+    temporary: { layout: 'temporaryLayoutType', position: 'temporaryPositionImageUrl', detail: 'temporaryDetailImageUrl' },
+    fix:       { layout: 'fixLayoutType',       position: 'fixPositionImageUrl',       detail: 'fixDetailImageUrl' },
   }
 
   const handleImageSave = (imgData) => {
@@ -465,33 +465,33 @@ export default function ReportModal({ report = null, user, onSave, onClose }) {
               />
             </div>
 
-            {/* Countermeasure — Before / After */}
+            {/* Countermeasure — Temporary / Fix */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="field-label">Countermeasure (Before)</label>
+                <label className="field-label">Countermeasure (Temporary)</label>
                 <textarea
                   className="field-input min-h-[72px] resize-none"
                   placeholder="Condition/action before…"
-                  value={form.countermeasureBefore}
-                  onChange={e => set('countermeasureBefore', e.target.value)}
+                  value={form.temporary}
+                  onChange={e => set('temporary', e.target.value)}
                 />
                 <div className="flex items-center gap-3 flex-wrap mt-2">
                   <button
                     type="button"
                     disabled={!isQC}
-                    onClick={() => { if (isQC) setImageTarget('cmBefore') }}
+                    onClick={() => { if (isQC) setImageTarget('temporary') }}
                     className="btn-ghost flex items-center gap-2"
                   >
                     <Camera className="w-4 h-4" />
-                    {form.cmBeforePositionImageUrl ? 'Change Images' : 'Add Images'}
+                    {form.temporaryPositionImageUrl ? 'Change Images' : 'Add Images'}
                   </button>
-                  {form.cmBeforePositionImageUrl ? (
+                  {form.temporaryPositionImageUrl ? (
                     <div className="flex gap-2">
-                      <img src={form.cmBeforePositionImageUrl} alt="countermeasure before"
+                      <img src={form.temporaryPositionImageUrl} alt="temporary"
                            className={`object-cover rounded border border-steel-200 dark:border-steel-700
-                             ${form.cmBeforeLayoutType === 'single' ? 'h-10 aspect-video' : 'h-10 w-10'}`} />
-                      {form.cmBeforeLayoutType === 'dual' && form.cmBeforeDetailImageUrl && (
-                        <img src={form.cmBeforeDetailImageUrl} alt="countermeasure before detail"
+                             ${form.temporaryLayoutType === 'single' ? 'h-10 aspect-video' : 'h-10 w-10'}`} />
+                      {form.temporaryLayoutType === 'dual' && form.temporaryDetailImageUrl && (
+                        <img src={form.temporaryDetailImageUrl} alt="temporary detail"
                              className="h-10 w-10 object-cover rounded border border-steel-200 dark:border-steel-700" />
                       )}
                     </div>
@@ -503,30 +503,30 @@ export default function ReportModal({ report = null, user, onSave, onClose }) {
                 </div>
               </div>
               <div>
-                <label className="field-label">Countermeasure (After)</label>
+                <label className="field-label">Countermeasure (Fix)</label>
                 <textarea
                   className="field-input min-h-[72px] resize-none"
                   placeholder="Condition/action after…"
-                  value={form.countermeasureAfter}
-                  onChange={e => set('countermeasureAfter', e.target.value)}
+                  value={form.fix}
+                  onChange={e => set('fix', e.target.value)}
                 />
                 <div className="flex items-center gap-3 flex-wrap mt-2">
                   <button
                     type="button"
                     disabled={!isQC}
-                    onClick={() => { if (isQC) setImageTarget('cmAfter') }}
+                    onClick={() => { if (isQC) setImageTarget('fix') }}
                     className="btn-ghost flex items-center gap-2"
                   >
                     <Camera className="w-4 h-4" />
-                    {form.cmAfterPositionImageUrl ? 'Change Images' : 'Add Images'}
+                    {form.fixPositionImageUrl ? 'Change Images' : 'Add Images'}
                   </button>
-                  {form.cmAfterPositionImageUrl ? (
+                  {form.fixPositionImageUrl ? (
                     <div className="flex gap-2">
-                      <img src={form.cmAfterPositionImageUrl} alt="countermeasure after"
+                      <img src={form.fixPositionImageUrl} alt="fix"
                            className={`object-cover rounded border border-steel-200 dark:border-steel-700
-                             ${form.cmAfterLayoutType === 'single' ? 'h-10 aspect-video' : 'h-10 w-10'}`} />
-                      {form.cmAfterLayoutType === 'dual' && form.cmAfterDetailImageUrl && (
-                        <img src={form.cmAfterDetailImageUrl} alt="countermeasure after detail"
+                             ${form.fixLayoutType === 'single' ? 'h-10 aspect-video' : 'h-10 w-10'}`} />
+                      {form.fixLayoutType === 'dual' && form.fixDetailImageUrl && (
+                        <img src={form.fixDetailImageUrl} alt="fix detail"
                              className="h-10 w-10 object-cover rounded border border-steel-200 dark:border-steel-700" />
                       )}
                     </div>
