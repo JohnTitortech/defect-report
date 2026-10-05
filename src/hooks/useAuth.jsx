@@ -22,7 +22,7 @@ export function AuthProvider({ children }) {
         return
       }
   
-      const role = await getUserRole(u.email)
+      const { role, supplierName } = await getUserRole(u.email)
   
       setUser({
         uid: u.uid,
@@ -30,6 +30,7 @@ export function AuthProvider({ children }) {
         displayName: u.displayName,
         photoURL: u.photoURL,
         role,
+        supplierName, // hanya terisi untuk role === 'SUPPLIER'
       })
   
       setLoading(false)
