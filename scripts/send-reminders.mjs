@@ -19,6 +19,11 @@
  *  - Flag *ReminderLastSentDate dipakai hanya untuk mencegah dua email
  *    terkirim di tanggal yang sama kalau workflow kebetulan dijalankan
  *    dua kali dalam satu hari (misalnya re-run manual).
+ *  - Penerima TIDAK lagi satu daftar untuk semua. Penerima ditentukan dari
+ *    koleksi `notificationRouting`, satu dokumen per Inspection Type:
+ *      { newDefect: [...], progressOverdue: [...], verificationOverdue: [...] }
+ *    Inspection Type yang belum ada dokumennya di situ = tidak ada email
+ *    yang dikirim untuk laporan dengan tipe tersebut.
  *
  * Kredensial dibaca dari environment variable (diisi oleh GitHub Actions
  * dari Secrets), TIDAK pernah ditulis langsung di file ini.
@@ -132,14 +137,19 @@ async function sendReminderEmail({ to_email, unit_no, model, problem, stage, day
   }
 }
 
+const EMPTY_ROUTING = { newDefect: [], progressOverdue: [], verificationOverdue: [] }
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
   const today = toJakartaDateOnly(new Date())
 
-  const recipientsSnap = await db.collection('notificationEmails').get()
-  const recipients = recipientsSnap.docs.map(d => d.data().email).filter(Boolean)
-  if (recipients.length === 0) {
-    console.log('Tidak ada notificationEmails terdaftar, tidak ada yang dikirim.')
+  // Muat semua aturan routing sekali di awal (satu dokumen per Inspection Type).
+  const routingSnap = await db.collection('notificationRouting').get()
+  const routingMap = {}
+  routingSnap.docs.forEach(d => { routingMap[d.id] = { ...EMPTY_ROUTING, ...d.data() } })
+
+  if (Object.keys(routingMap).length === 0) {
+    console.log('Belum ada notificationRouting yang diatur, tidak ada yang dikirim.')
     return
   }
 
@@ -150,9 +160,10 @@ async function main() {
     const report = docSnap.data()
     const progress = report.progress ?? 0
     const verification = report.verification ?? 0
+    const routing = routingMap[report.inspectionType] || EMPTY_ROUTING
 
     // ── Tahap Progress ──
-    if (progress < 4) {
+    if (progress < 4 && routing.progressOverdue.length > 0) {
       const baseDate = dateStringToDateOnly(report.date)
       const dueDate  = baseDate && nextBusinessDay(baseDate)
       const alreadySentToday = report.progressReminderLastSentDate === jakartaDateKey(today)
@@ -161,7 +172,7 @@ async function main() {
       if (isDueOrLater && !alreadySentToday) {
         const days = calendarDaysBetween(baseDate, today)
         await Promise.allSettled(
-          recipients.map(to_email => sendReminderEmail({
+          routing.progressOverdue.map(to_email => sendReminderEmail({
             to_email,
             unit_no: report.unitNo || '-',
             model: report.model || '-',
@@ -172,12 +183,12 @@ async function main() {
         )
         await docSnap.ref.update({ progressReminderLastSentDate: jakartaDateKey(today) })
         sentCount++
-        console.log(`Reminder progress terkirim (> ${days} hari): ${report.unitNo}`)
+        console.log(`Reminder progress terkirim (> ${days} hari) [${report.inspectionType}]: ${report.unitNo}`)
       }
     }
 
     // ── Tahap Verification (hanya relevan kalau progress sudah 4) ──
-    if (progress >= 4 && verification < 1) {
+    if (progress >= 4 && verification < 1 && routing.verificationOverdue.length > 0) {
       const baseDate = tsToDateOnly(report.progressTimestamps?.['4'])
       const dueDate  = baseDate && nextBusinessDay(baseDate)
       const alreadySentToday = report.verificationReminderLastSentDate === jakartaDateKey(today)
@@ -186,7 +197,7 @@ async function main() {
       if (isDueOrLater && !alreadySentToday) {
         const days = calendarDaysBetween(baseDate, today)
         await Promise.allSettled(
-          recipients.map(to_email => sendReminderEmail({
+          routing.verificationOverdue.map(to_email => sendReminderEmail({
             to_email,
             unit_no: report.unitNo || '-',
             model: report.model || '-',
@@ -197,7 +208,7 @@ async function main() {
         )
         await docSnap.ref.update({ verificationReminderLastSentDate: jakartaDateKey(today) })
         sentCount++
-        console.log(`Reminder verification terkirim (> ${days} hari): ${report.unitNo}`)
+        console.log(`Reminder verification terkirim (> ${days} hari) [${report.inspectionType}]: ${report.unitNo}`)
       }
     }
   }
