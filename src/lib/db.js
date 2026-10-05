@@ -55,7 +55,7 @@ export async function createReport(data) {
 // / report.fix saja — tidak perlu tahu field mana yang dipakai dokumen itu.
 // Field lama TIDAK dihapus dari objek yang dikembalikan, jadi apa pun yang
 // kebetulan masih merujuknya tidak akan rusak.
-function normalizeCountermeasureFields(data) {
+export function normalizeCountermeasureFields(data) {
   return {
     ...data,
     temporary: data.temporary ?? data.countermeasureBefore ?? data.countermeasure ?? '',
