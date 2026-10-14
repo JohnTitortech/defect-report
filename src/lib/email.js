@@ -10,7 +10,7 @@
  *     tadi lewat login Google → catat SERVICE_ID
  *  3. Email Templates → Create New Template. Isi "To email" dengan
  *     {{to_email}}, lalu isi body dengan variabel:
- *     {{unit_no}}, {{model}}, {{problem}}, {{link}} → catat TEMPLATE_ID
+ *     {{problem}}, {{link}} → catat TEMPLATE_ID
  *  4. Account → General → catat PUBLIC KEY
  *  5. Isi tiga nilai itu di file .env:
  *     VITE_EMAILJS_SERVICE_ID=...
@@ -49,9 +49,9 @@ export async function sendNewDefectEmail(report) {
   }
   if (recipients.length === 0) return
 
+  // Sengaja HANYA problem + link. Frame Number/Model tidak dikirim lewat
+  // email karena alasan keamanan dokumen perusahaan.
   const params = {
-    unit_no: report.unitNo || '-',
-    model:   report.model  || '-',
     problem: report.problem || '-',
     link:    APP_LINK,
   }
