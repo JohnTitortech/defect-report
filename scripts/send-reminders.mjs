@@ -115,7 +115,7 @@ function dateStringToDateOnly(dateStr) {
 }
 
 // ── EmailJS REST API (server-side, pakai private key sebagai accessToken) ──
-async function sendReminderEmail({ to_email, unit_no, model, problem, stage, days }) {
+async function sendReminderEmail({ to_email, problem, stage, days }) {
   const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -125,7 +125,7 @@ async function sendReminderEmail({ to_email, unit_no, model, problem, stage, day
       user_id: EMAILJS_PUBLIC_KEY,
       accessToken: EMAILJS_PRIVATE_KEY,
       template_params: {
-        to_email, unit_no, model, problem,
+        to_email, problem,
         stage: stage === 'progress' ? 'Progress' : 'Verification',
         days: String(days),
         link: APP_LINK,
@@ -174,8 +174,6 @@ async function main() {
         await Promise.allSettled(
           routing.progressOverdue.map(to_email => sendReminderEmail({
             to_email,
-            unit_no: report.unitNo || '-',
-            model: report.model || '-',
             problem: report.problem || '-',
             stage: 'progress',
             days,
@@ -183,7 +181,7 @@ async function main() {
         )
         await docSnap.ref.update({ progressReminderLastSentDate: jakartaDateKey(today) })
         sentCount++
-        console.log(`Reminder progress terkirim (> ${days} hari) [${report.inspectionType}]: ${report.unitNo}`)
+        console.log(`Reminder progress terkirim (> ${days} hari) [${report.inspectionType}]: ${docSnap.id}`)
       }
     }
 
@@ -199,8 +197,6 @@ async function main() {
         await Promise.allSettled(
           routing.verificationOverdue.map(to_email => sendReminderEmail({
             to_email,
-            unit_no: report.unitNo || '-',
-            model: report.model || '-',
             problem: report.problem || '-',
             stage: 'verification',
             days,
@@ -208,7 +204,7 @@ async function main() {
         )
         await docSnap.ref.update({ verificationReminderLastSentDate: jakartaDateKey(today) })
         sentCount++
-        console.log(`Reminder verification terkirim (> ${days} hari) [${report.inspectionType}]: ${report.unitNo}`)
+        console.log(`Reminder verification terkirim (> ${days} hari) [${report.inspectionType}]: ${docSnap.id}`)
       }
     }
   }
